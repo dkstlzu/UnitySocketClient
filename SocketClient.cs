@@ -75,7 +75,8 @@ namespace UnitySocketClient
 
             Socket.Connect(iPEndPoint);
 
-            if (Socket == null)
+            
+            if (!Socket.Connected)
             {
                 Debug.LogFormat("Connection failed");
                 return false;
@@ -86,10 +87,33 @@ namespace UnitySocketClient
                 return true;
             }
         }
+
+        public void ConnectAsync()
+        {
+            if (Socket == null) SetSocket();
+
+            if (iPEndPoint == null) SetEndPoint();
+
+            Socket.BeginConnect(iPEndPoint, AfterConnectAsync, null);
+        }
+
+        void AfterConnectAsync(IAsyncResult result)
+        {
+            try
+            {
+                Socket.EndConnect(result);
+            }
+            catch (Exception e)
+            {
+                Debug.LogError(e.ToString());
+            }
+        }
+
         public void UDPSend(byte[] bytes)
         {
             Socket.SendTo(bytes, iPEndPoint);
         }
+
 
         public void UDPSend(string str)
         {
@@ -98,7 +122,53 @@ namespace UnitySocketClient
 
         public void UDPReceive()
         {
-            
+            EndPoint EP = (EndPoint)iPEndPoint;
+            Socket.ReceiveFrom(bytesReceived, 0, bytesReceived.Length, SocketFlags.None, ref EP);
+        }
+        
+        public void UDPSendAsync(byte[] bytes)
+        {
+            Socket.BeginSendTo(bytes, 0, bytes.Length, SocketFlags.None, iPEndPoint, AfterUDPSend, null);
+        }
+
+        public void UDPSendAsync(string str)
+        {
+            UDPSendAsync(UTF8FromString(str));
+        }
+
+        public void UDPReceiveAsync()
+        {
+            EndPoint EP = (EndPoint)iPEndPoint;
+            Socket.BeginReceiveFrom(bytesReceived, 0, bytesReceived.Length, SocketFlags.None, ref EP, AfterUDPRecieve, EP);
+        }
+
+        void AfterUDPSend(IAsyncResult result)
+        {
+            try
+            {
+                Socket.EndSendTo(result);
+            }
+            catch (Exception e)
+            {
+                Debug.LogError(e.ToString());
+            }
+        }
+
+        void AfterUDPRecieve(IAsyncResult result)
+        {
+            try
+            {
+                EndPoint EP= (EndPoint)result.AsyncState;
+                int dataLength = Socket.EndReceiveFrom(result, ref EP);
+                if (dataLength > 0)
+                {
+                    ResponsesQueue.Enqueue(StringFromUTF8(bytesReceived));
+                }
+            }
+            catch (Exception e)
+            {
+                Debug.LogError(e.ToString());
+            }
         }
 
         public SocketError TCPSend(byte[] bytes)
@@ -166,26 +236,39 @@ namespace UnitySocketClient
 
         void AfterTCPSend(IAsyncResult result)
         {
-            Socket.EndSend(result, out SendErrorCode);
-            Debug.LogFormat("End Send {0}", SendErrorCode);
+            try
+            {
+                Socket.EndSend(result, out SendErrorCode);
+            }
+            catch (Exception e)
+            {
+                Debug.LogError(e.ToString());
+                Debug.LogError(SendErrorCode.ToString());
+            }
         }
 
         void AfterTCPReceive(IAsyncResult result)
         {
-            Socket.EndReceive(result, out ReceiveErrorCode);
-            Response = Encoding.ASCII.GetString(bytesReceived, 0, receivedBytesLength);
-            if (ReceiveErrorCode == SocketError.Success)
+            try
             {
-                Debug.LogFormat($"End Receive succeed : {Response}");
-            } else
+                Socket.EndReceive(result, out ReceiveErrorCode);
+                ResponsesQueue.Enqueue(StringFromUTF8(bytesReceived));
+            }
+            catch (Exception e)
             {
-                Debug.LogFormat($"End Receive fail : {ReceiveErrorCode.ToString()}");
+                Debug.LogError(e.ToString());
+                Debug.LogError(SendErrorCode.ToString());
             }
         }
 
         byte[] UTF8FromString(string str)
         {
             return Encoding.UTF8.GetBytes(str);
+        }
+
+        string StringFromUTF8(byte[] bytes)
+        {
+            return Encoding.UTF8.GetString(bytes);
         }
 
         public string GetResponse()
