@@ -97,6 +97,12 @@ namespace UnitySocketClient
             Socket.BeginConnect(iPEndPoint, AfterConnectAsync, null);
         }
 
+        ~SocketClient()
+        {
+            Socket.Shutdown(SocketShutdown.Both);
+            Socket.Close();
+        }
+
         void AfterConnectAsync(IAsyncResult result)
         {
             try
