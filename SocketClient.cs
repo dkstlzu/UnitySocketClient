@@ -279,7 +279,10 @@ namespace UnitySocketClient
 
         public string GetResponse()
         {
-            return ResponsesQueue.Dequeue();
+            if (ResponsesQueue.Count == 0)
+                return string.Empty;
+            else
+                return ResponsesQueue.Dequeue();
         }
 
     }
